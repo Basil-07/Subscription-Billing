@@ -118,7 +118,10 @@ interface AuthSession {
 }
 
 function App() {
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  // Environment variables are easy to paste with a trailing slash. Normalize
+  // it here so requests never become `//auth/login`, which Vercel redirects
+  // and browsers reject during a CORS preflight request.
+  const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
   // Auth State
   const [session, setSession] = useState<AuthSession | null>(() => {
@@ -213,9 +216,21 @@ function App() {
     }
   }, [targetPlanId, effectiveAtMode, customEffectiveAt, custSub?.plan_id]);
 
-  const generateNewIdempotencyKey = () => {
-    setIdempotencyKey(`key_${Math.random().toString(36).substring(2, 10)}`);
+  const createIdempotencyKey = () => {
+    // Financial mutations must be safe to retry. A fresh key is created for
+    // each new operation and retained if the user retries the same request.
+    return `plan_change_${crypto.randomUUID()}`;
   };
+
+  const generateNewIdempotencyKey = () => {
+    setIdempotencyKey(createIdempotencyKey());
+  };
+
+  useEffect(() => {
+    if (!idempotencyKey) {
+      generateNewIdempotencyKey();
+    }
+  }, [idempotencyKey]);
 
   const fetchPlans = async () => {
     try {
@@ -453,6 +468,10 @@ function App() {
 
   const handleApplyPlanChange = async () => {
     if (!session || !custSub) return;
+    // This fallback also covers a user clicking before the initialization
+    // effect has completed.
+    const requestIdempotencyKey = idempotencyKey || createIdempotencyKey();
+    if (!idempotencyKey) setIdempotencyKey(requestIdempotencyKey);
     setActionLoading(true);
     setApiResponse(null);
     try {
@@ -462,7 +481,7 @@ function App() {
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.token}`,
-          "Idempotency-Key": idempotencyKey
+          "Idempotency-Key": requestIdempotencyKey
         },
         body: JSON.stringify({ to_plan_id: toPlan })
       });
