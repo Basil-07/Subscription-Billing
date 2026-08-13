@@ -1,0 +1,37 @@
+services:
+
+  db:
+    image: postgres:16
+    container_name: billing-db
+    environment:
+      POSTGRES_DB: billing
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: billing
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing -d billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    container_name: billing-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://billing:billing@db:5432/billing
+      WEBHOOK_SECRET: development-secret-change-me
+      APP_ENV: development
+      ENABLE_MOCK_GATEWAY: "true"
+      AUTO_INITIALIZE_DATABASE: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

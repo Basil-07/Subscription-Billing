@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Plan {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @map("id") @db.Uuid
+  name        String   @unique
+  price_cents Int
+  createdAt   DateTime @default(now())
+  subscriptions Subscription[]
+}
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  password_hash String
+  role          String
+  createdAt     DateTime @default(now())
+  customers     Customer[]
+}
+
+model Customer {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  userId      String?  @db.Uuid
+  user        User?    @relation(fields: [userId], references: [id])
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId String   @db.Uuid
+  planId     String   @db.Uuid
+  status     String
+  cycle_start DateTime
+  cycle_end  DateTime
+  version    Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+  plan       Plan     @relation(fields: [planId], references: [id])
+}
